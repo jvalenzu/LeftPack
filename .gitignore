@@ -1,2 +1,5 @@
-CodeGen/*.cpp
 obj/*
+CodeGen/*.cpp
+CodeGen/*.h
+Test
+LeftPack
