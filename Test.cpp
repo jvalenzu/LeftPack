@@ -9,7 +9,7 @@
 #include <emmintrin.h>
 #include <x86intrin.h>
 
-#if defined(__darwin__)
+#if  __APPLE__
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #endif
@@ -261,7 +261,11 @@ int sort_lzcnt(const void* a, const void* b)
     return ((_popcnt32(*ap)<<16)|*ap) - ((_popcnt32(*bp)<<16)|*bp);
 }
 
+#if __APPLE__
+int sort_by_histogram(void* thunk, const void* a, const void* b)
+#else
 int sort_by_histogram(const void* a, const void* b, void* thunk)
+#endif
 {
     int *priority = (int*)thunk;
     
@@ -276,7 +280,12 @@ void indices8(int histogram[256])
     int indices[256];
     for (int i=0; i<256; ++i)
         indices[i] = i;
+
+#if __APPLE__
+    qsort_r(indices, 256, sizeof(int), histogram, sort_by_histogram);
+#else
     qsort_r(indices, 256, sizeof(int), sort_by_histogram, histogram);
+#endif
 
     int rev_indices[256];
     for (int i=0; i<256; ++i)
