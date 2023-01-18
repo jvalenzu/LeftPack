@@ -8,8 +8,12 @@
 #include <immintrin.h>
 #include <emmintrin.h>
 #include <x86intrin.h>
+
+#if defined(__darwin__)
 #include <mach/mach.h>
 #include <mach/mach_time.h>
+#endif
+
 #include <limits.h>
 
 #include <sys/stat.h>
@@ -54,7 +58,11 @@ void dump(const char* label, __m128i x)
            value8[0]&15, value8[1]&15, value8[2]&15, value8[3]&15, value8[4]&15, value8[5]&15, value8[6]&15, value8[7]&15, 
            value8[8]&15, value8[9]&15, value8[10]&15, value8[11]&15, value8[12]&15, value8[13]&15, value8[14]&15, value8[15]&15);
 
+#if __linux__
+    printf("    %016lx %016lx\n", value64[0], value64[1]);
+#else
     printf("    %016llx %016llx\n", value64[0], value64[1]);
+#endif
 }
 
 void test0()
@@ -74,6 +82,7 @@ void test0()
 
 int main(int argc, char* argv[])
 {
+#if false
     const unsigned char f[] = { 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f };
     const __m128i       m   = _mm_set_epi8(0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f);
 
@@ -81,6 +90,7 @@ int main(int argc, char* argv[])
     dump("m", _mm_load_si128(&m));
 
     return 0;
+#endif
 
     const char* fname = (argc > 1) ? argv[1] : "CountOfMonteCristo.txt";
 
@@ -251,7 +261,7 @@ int sort_lzcnt(const void* a, const void* b)
     return ((_popcnt32(*ap)<<16)|*ap) - ((_popcnt32(*bp)<<16)|*bp);
 }
 
-int sort_by_histogram(void* thunk, const void* a, const void* b)
+int sort_by_histogram(const void* a, const void* b, void* thunk)
 {
     int *priority = (int*)thunk;
     
@@ -266,7 +276,7 @@ void indices8(int histogram[256])
     int indices[256];
     for (int i=0; i<256; ++i)
         indices[i] = i;
-    qsort_r(indices, 256, sizeof(int), histogram, sort_by_histogram);
+    qsort_r(indices, 256, sizeof(int), sort_by_histogram, histogram);
 
     int rev_indices[256];
     for (int i=0; i<256; ++i)
@@ -302,5 +312,4 @@ void indices8(int histogram[256])
     }
 
     printf(")\n");
-    
 }

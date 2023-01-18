@@ -7,8 +7,35 @@
 #include <immintrin.h>
 #include <emmintrin.h>
 #include <x86intrin.h>
+
+#if __darwin__
 #include <mach/mach.h>
 #include <mach/mach_time.h>
+
+typedef uint64_t tick_t;
+
+#define get_ticks()            clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+#define delta_ticks(start,end) (uint64_t)(((end) - (start)))
+#elif __linux__
+#include <time.h>
+
+typedef timespec tick_t;
+
+timespec get_ticks()
+{
+    timespec t;
+    clock_gettime(CLOCK_REALTIME, &t);
+    return t;
+}
+
+uint64_t delta_ticks(timespec start, timespec end)
+{
+    const long mssec0 = (end.tv_nsec - start.tv_nsec);
+    const long mssec1 = ( end.tv_sec - start.tv_sec) * (1024 * 1024 * 1024);
+    return mssec0 + mssec1;
+}
+
+#endif
 
 #include <sys/stat.h>
 #include <time.h>
@@ -54,11 +81,11 @@ int simd_lut(char* out, const char* in, size_t count)
 
     while (in != in_last)
     {
-        const __m128i c0 = _mm_load_si128((__m128i*) in);
+        __m128i c0 = _mm_load_si128((__m128i*) in);
         const __m128i m0 =  _mm_cmpeq_epi8(c0, spaces);
         const int movemask =  _mm_movemask_epi8(m0);
         const int p0 = _popcnt32(movemask);
-        const __m128i big_shuffle_mask = _mm_load_si128(&g_BigMasks[movemask]);
+        __m128i big_shuffle_mask = _mm_load_si128(&g_BigMasks[movemask]);
         const __m128i packed = _mm_shuffle_epi8(c0, big_shuffle_mask);
         
         _mm_storeu_si128((__m128i*) &out[out_offset], packed);
@@ -8296,8 +8323,8 @@ int simd_lutmap(char* out, const char* in, size_t count)
 
 int simd_2lut(char* out, const char* in, size_t count)
 {
-    const __m64  zero64   = _mm_set_pi8(0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80);
-    const __m128 zero128 = _mm_set1_epi8(0x80);
+    const __m64  zero64 = _mm_set_pi8(0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80);
+    const __m128i zero128 = _mm_set1_epi8(0x80);
     const __m128i spaces = _mm_set1_epi8(' ');
     
     const char* in_first = in;
@@ -8432,17 +8459,17 @@ int main()
     uint64_t avg_2lutmap = 0;
 
     int skip_count = 0;
-
+    
     {
-        const uint64_t start = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+        const tick_t start = get_ticks();
         for (int u=0; u<kRuns; ++u)
         {
             skip_count = baseline(dest, buffer, buf.st_size);
         }
-        const uint64_t end = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-        avg_baseline += end - start;
+        const tick_t end = get_ticks();
+        avg_baseline = delta_ticks(start, end);
     }
-
+    
     mkdir("output", S_IROTH|S_IXOTH|S_IXGRP|S_IRGRP|S_IRWXU);
 
     {
@@ -8455,13 +8482,25 @@ int main()
     // -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- 
 
     {
-        const uint64_t start = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+        const tick_t start = get_ticks();
+        for (int u=0; u<kRuns; ++u)
+        {
+            skip_count = simd_2lutmap(dest, buffer, buf.st_size);
+        }
+        const tick_t end = get_ticks();
+        avg_2lutmap += delta_ticks(start, end);
+    }
+
+    // -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- 
+
+    {
+        const tick_t start = get_ticks();
         for (int u=0; u<kRuns; ++u)
         {
             skip_count = simd_lut(dest, buffer, buf.st_size);
         }
-        const uint64_t end = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-        avg_lut += end - start;
+        const tick_t end = get_ticks();
+        avg_lut += delta_ticks(start, end);
     }
 
     {
@@ -8474,13 +8513,13 @@ int main()
     // -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- 
 
     {
-        const uint64_t start = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+        const tick_t start = get_ticks();
         for (int u=0; u<kRuns; ++u)
         {
             skip_count = simd_lutmap(dest, buffer, buf.st_size);
         }
-        const uint64_t end = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-        avg_lutmap += end - start;
+        const tick_t end = get_ticks();
+        avg_lutmap += delta_ticks(start, end);
     }
 
     {
@@ -8493,13 +8532,13 @@ int main()
     // -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- 
 
     {
-        const uint64_t start = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+        const tick_t start = get_ticks();
         for (int u=0; u<kRuns; ++u)
         {
             skip_count = simd_2lut(dest, buffer, buf.st_size);
         }
-        const uint64_t end = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-        avg_2lut += end - start;
+        const tick_t end = get_ticks();        
+        avg_2lut += delta_ticks(start, end);
     }
 
     {
@@ -8507,18 +8546,6 @@ int main()
         dest[skip_count] = 0;
         fwrite(dest, skip_count, 1, fh);
         fclose(fh);
-    }
-
-    // -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- 
-
-    {
-        const uint64_t start = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-        for (int u=0; u<kRuns; ++u)
-        {
-            skip_count = simd_2lutmap(dest, buffer, buf.st_size);
-        }
-        const uint64_t end = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-        avg_2lutmap += end - start;
     }
 
     // -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*- -*-
@@ -8537,7 +8564,7 @@ int main()
     const float ms_2lutmap  = avg_2lutmap/(1024.0f * 1024.0f * kRuns);
     
     printf("%lld baseline: %fms LUT: %fms Mapped LUT: %fms 2LUT: %fms Mapped 2LUT: %fms\n",
-           buf.st_size, ms_baseline, ms_lut, ms_lutmap, ms_2lut, ms_2lutmap);
+           (long long int) buf.st_size, ms_baseline, ms_lut, ms_lutmap, ms_2lut, ms_2lutmap);
     
     free(buffer);
     free(dest);

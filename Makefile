@@ -2,9 +2,7 @@
 
 include Build/rules.mk
 
-CPPFLAGS += -Wno-unused-variable -Werror
-CPPFLAGS += -mpopcnt
-CPPFLAGS += -mlzcnt
+CPPFLAGS += -Wno-unused-variable -Werror -Wno-unused-result
 
 INCLUDES += -IExternal
 INCLUDES += -IExternal/include

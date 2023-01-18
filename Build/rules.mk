@@ -9,22 +9,35 @@ first_dot = $(subst $(space),.,$(wordlist 1, 2,$(subst ., ,$(1))))
 
 CPPFLAGS += -Wno-parentheses
 CPPFLAGS += -Wno-deprecated-declarations
-CPPFLAGS += -Wc++11-extensions
 
 ifeq ($(BUILD_TYPE),Release)
-CPPFLAGS += -O2 -g -fprofile-instr-generate -fcoverage-mapping
+CPPFLAGS += -O2  -g -fprofile-instr-generate -fcoverage-mapping
 CPPFLAGS += -DNDEBUG=1
 else
-#CPPFLAGS += -fstack-protector-strong
-CPPFLAGS += -g -O2
+CPPFLAGS += -g -O3
 CPPFLAGS += -D_DEBUG=1
 endif
 
-CXXFLAGS += -std=c++11 -stdlib=libc++ 
+CXXFLAGS += -std=c++11
+CPPFLAGS += -mpopcnt
+CPPFLAGS += -mlzcnt
+
+ifeq ($(CXX),g++)
+CPPFLAGS += -march=native -msse3
+endif
+
+ifneq ($(CXX),g++)
+CPPFLAGS += -Wc++11-extensions
+CXXFLAGS += -std=c++11 -stdlib=libc++
+endif
 
 ifeq ($(BUILD_TYPE),Release)
-LDFLAGS += -Wc++11-extensions -fprofile-instr-generate
+LDFLAGS +=  -fprofile-instr-generate
 else
+LDFLAGS += 
+endif
+
+ifneq ($(CXX),g++)
 LDFLAGS += -Wc++11-extensions
 endif
 
